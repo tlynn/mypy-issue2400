@@ -45,6 +45,7 @@ import mypy.checkexpr
 from mypy.checkmember import (
     analyze_member_access, analyze_descriptor_access, type_object_type,
 )
+from mypy.checkunbound import UnboundLocalErrorChecker
 from mypy.typeops import (
     map_type_from_supertype, bind_self, erase_to_bound, make_simplified_union,
     erase_def_to_union_or_bound, erase_to_union_or_bound, coerce_to_literal,
@@ -723,6 +724,7 @@ class TypeChecker(NodeVisitor[None], CheckerPluginInterface):
         if not self.recurse_into_functions:
             return
         with self.tscope.function_scope(defn):
+            defn.accept(UnboundLocalErrorChecker(self.msg, self.options))
             self._visit_func_def(defn)
 
     def _visit_func_def(self, defn: FuncDef) -> None:

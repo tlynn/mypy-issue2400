@@ -1077,9 +1077,9 @@ class Popen(object):
                 self.stdin.close()
 
             if self.stdout:
-                stdout_thread.join()
+                stdout_thread.join()  # type: ignore
             if self.stderr:
-                stderr_thread.join()
+                stderr_thread.join()  # type: ignore
 
             # All data exchanged.  Translate lists into strings.
             if stdout is not None:

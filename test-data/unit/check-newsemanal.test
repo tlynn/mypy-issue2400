@@ -438,7 +438,7 @@ gy = gx
 def main() -> None:
     class C:
         def meth(self) -> None:
-            lx = ly  # E: Cannot resolve name "ly" (possible cyclic definition)
+            lx = ly  # E: Cannot resolve name "ly" (possible cyclic definition) # N: May raise UnboundLocalError: local variable 'ly' referenced before assignment
             ly = lx
 
 [case testNewAnalyzerCyclicDefinitionCrossModule]
@@ -935,14 +935,14 @@ class C:
 from typing import NamedTuple
 
 c = C()
-reveal_type(c.o)  # N: Revealed type is 'Tuple[Tuple[builtins.str, __main__.Other@12, fallback=__main__.C.In@11], __main__.Other@12, fallback=__main__.C.Out@10]'
-reveal_type(c.o.x)  # N: Revealed type is 'Tuple[builtins.str, __main__.Other@12, fallback=__main__.C.In@11]'
+reveal_type(c.o)  # N: Revealed type is 'Tuple[Tuple[builtins.str, __main__.Other@12, fallback=__main__.C.In@10], __main__.Other@12, fallback=__main__.C.Out@11]'
+reveal_type(c.o.x)  # N: Revealed type is 'Tuple[builtins.str, __main__.Other@12, fallback=__main__.C.In@10]'
 
 class C:
     def get_tuple(self) -> None:
         self.o: Out
-        Out = NamedTuple('Out', [('x', In), ('y', Other)])
         In = NamedTuple('In', [('s', str), ('t', Other)])
+        Out = NamedTuple('Out', [('x', In), ('y', Other)])
         class Other: pass
 [builtins fixtures/tuple.pyi]
 

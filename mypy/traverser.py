@@ -137,10 +137,10 @@ class TraverserVisitor(NodeVisitor[None]):
             tp = o.types[i]
             if tp is not None:
                 tp.accept(self)
-            o.handlers[i].accept(self)
-        for v in o.vars:
+            v = o.vars[i]
             if v is not None:
                 v.accept(self)
+            o.handlers[i].accept(self)
         if o.else_body is not None:
             o.else_body.accept(self)
         if o.finally_body is not None:

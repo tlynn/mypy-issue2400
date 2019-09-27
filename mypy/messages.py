@@ -1011,6 +1011,10 @@ class MessageBuilder:
         self.note('{} operand is of type {}'.format(side, format_type(original)), context,
                   code=codes.OPERATOR)
 
+    def warn_may_raise_unbound_local_error(self, local_name: str, context: Context) -> None:
+        self.note("May raise UnboundLocalError: local variable '{}' referenced "
+                  "before assignment".format(local_name), context)
+
     def operator_method_signatures_overlap(
             self, reverse_class: TypeInfo, reverse_method: str, forward_class: Type,
             forward_method: str, context: Context) -> None:
