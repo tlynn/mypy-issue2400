@@ -35,7 +35,9 @@ from mypy.types import (
     UnionType, TypeVarId, TypeVarType, PartialType, DeletedType, UninhabitedType, TypeVarDef,
     is_named_instance, union_items, TypeQuery, LiteralType,
     is_optional, remove_optional, TypeTranslator, StarType, get_proper_type, ProperType,
-    get_proper_types, is_literal_type, TypeAliasType)
+    get_proper_types, is_literal_type, TypeAliasType
+    ,UnboundType #FIXME
+)
 from mypy.sametypes import is_same_type
 from mypy.messages import (
     MessageBuilder, make_inferred_type_note, append_invariance_notes, pretty_seq,
@@ -45,7 +47,7 @@ import mypy.checkexpr
 from mypy.checkmember import (
     analyze_member_access, analyze_descriptor_access, type_object_type,
 )
-from mypy.checkunbound import UnboundLocalErrorChecker
+from mypy.checkunbound import UnboundLocalErrorChecker, _get_locals, _get_globals #FIXME: underscores
 from mypy.typeops import (
     map_type_from_supertype, bind_self, erase_to_bound, make_simplified_union,
     erase_def_to_union_or_bound, erase_to_union_or_bound, coerce_to_literal,
@@ -207,6 +209,9 @@ class TypeChecker(NodeVisitor[None], CheckerPluginInterface):
     # functions such as open(), etc.
     plugin = None  # type: Plugin
 
+    # Locals in current function.
+    local_names = None  # type: List[str]
+
     def __init__(self, errors: Errors, modules: Dict[str, MypyFile], options: Options,
                  tree: MypyFile, path: str, plugin: Plugin) -> None:
         """Construct a type checker.
@@ -252,6 +257,7 @@ class TypeChecker(NodeVisitor[None], CheckerPluginInterface):
         # NOTE: we use the context manager to avoid "threading" an additional `is_final_def`
         # argument through various `checker` and `checkmember` functions.
         self._is_final_def = False
+        self.local_names = []
 
     @property
     def type_context(self) -> List[Optional[Type]]:
@@ -724,7 +730,7 @@ class TypeChecker(NodeVisitor[None], CheckerPluginInterface):
         if not self.recurse_into_functions:
             return
         with self.tscope.function_scope(defn):
-            defn.accept(UnboundLocalErrorChecker(self.msg, self.options))
+            #defn.accept(UnboundLocalErrorChecker(self.msg, self.options))
             self._visit_func_def(defn)
 
     def _visit_func_def(self, defn: FuncDef) -> None:
@@ -808,8 +814,30 @@ class TypeChecker(NodeVisitor[None], CheckerPluginInterface):
         yield None
         self.inferred_attribute_types = old_types
 
+    def is_local(self, name):
+        return name in self.local_names
+
     def check_func_def(self, defn: FuncItem, typ: CallableType, name: Optional[str]) -> None:
         """Type check a function definition."""
+
+        #print('check_func_def: not calculating locals', defn.arg_names)
+        locals = _get_locals(defn, self.options)
+        globals = _get_globals(defn)
+        undef_names = locals
+        for name in globals.union(set(defn.arg_names)):
+            if name in undef_names:
+                del undef_names[name]
+        ##print('XXX undef_names:', undef_names)
+        self.local_names = undef_names
+
+#        for arg, name in zip(defn.arguments, defn.arg_names):
+#            lvalue = NameExpr(name)
+#            lvalue.node = arg.variable #.node #'HACK'
+#            lvalue_type = rvalue_type = UnboundType(name)
+#            print('BINDING', name, 'TO', arg.variable)
+#            self.binder.assign_type(lvalue, rvalue_type, lvalue_type, False)
+
+
         # Expand type variables with value restrictions to ordinary types.
         expanded = self.expand_typevars(defn, typ)
         for item, typ in expanded:
@@ -974,7 +1002,39 @@ class TypeChecker(NodeVisitor[None], CheckerPluginInterface):
                     # TODO: Find a way of working around this limitation
                     if len(expanded) >= 2:
                         self.binder.suppress_unreachable_warnings()
+
+                    if 0: #XYZZY was enabled
+                     for undef_name, var in undef_names.items():
+                        lvalue = NameExpr(undef_name)
+                        lvalue.node = var.node #'HACK'
+                        lvalue_type = rvalue_type = UnboundType(undef_name)
+
+                        #self.scope.semantic_analyzer.analyze_name_lvalue(lvalue, explicit_type=True, is_final=False, escape_comprehensions=False)
+                        #var = self.scope.semantic_analyzer.get(lvalue)
+                        #var = self.expr_checker.analyze_var_ref(None, lvalue)
+                        #print('BOUND', var)
+
+                        with self.enter_final_context(False):
+                            # self.check_assignment(lv, rvalue, s.type is None)
+                            if not lvalue.is_special_form:
+                                self.binder.assign_type(lvalue, rvalue_type, lvalue_type, False)
+                    if 0: #XYZZY
+                     for arg, name in zip(defn.arguments, defn.arg_names):
+                        lvalue = NameExpr(name)
+                        lvalue.node = arg.variable #.node #'HACK'
+                        lvalue_type = rvalue_type = UnboundType(name)
+                        print('BINDING', name, 'TO', arg.variable)
+                        self.binder.assign_type(lvalue, rvalue_type, lvalue_type, False)
+
                     self.accept(item.body)
+
+                    #for undef_name in undef_names: #XYZZY
+                    #    node = NameExpr(undef_name)
+                    #    print('CHECKING', node)
+                    #    self.expr_checker.accept(node, allow_none_return=True, always_allow_any=True)
+                    #    #if isinstance(self.type_map[node], UninhabitedType):
+                    #    #    1/0
+
                 unreachable = self.binder.is_unreachable()
 
             if (self.options.warn_no_return and not unreachable):
@@ -2009,6 +2069,7 @@ class TypeChecker(NodeVisitor[None], CheckerPluginInterface):
 
         Handle all kinds of assignment statements (simple, indexed, multiple).
         """
+        print('*'*70+'\nCHECKING ASSIGNMENT')
         with self.enter_final_context(s.is_final_def):
             self.check_assignment(s.lvalues[-1], s.rvalue, s.type is None, s.new_syntax)
 
@@ -2047,6 +2108,12 @@ class TypeChecker(NodeVisitor[None], CheckerPluginInterface):
     def check_assignment(self, lvalue: Lvalue, rvalue: Expression, infer_lvalue_type: bool = True,
                          new_syntax: bool = False) -> None:
         """Type check a single assignment: lvalue = rvalue."""
+        # GGG THL Added {
+        #Fixed? print("GGG THL: FIXME: Can't use binder.get() on 'a,b,c,d' (!literal)")
+        if self.binder.get(lvalue) is None:
+            self.binder.put(lvalue, AnyType(TypeOfAny.unannotated))
+            print("GGG BOUND", lvalue)
+        # GGG }
         if isinstance(lvalue, TupleExpr) or isinstance(lvalue, ListExpr):
             self.check_assignment_to_multiple_lvalues(lvalue.items, rvalue, rvalue,
                                                       infer_lvalue_type)
@@ -2077,6 +2144,7 @@ class TypeChecker(NodeVisitor[None], CheckerPluginInterface):
                     return
 
             if lvalue_type:
+                # XXXHH
                 if isinstance(lvalue_type, PartialType) and lvalue_type.type is None:
                     # Try to infer a proper type for a variable with a partial None type.
                     rvalue_type = self.expr_checker.accept(rvalue)
@@ -2149,7 +2217,9 @@ class TypeChecker(NodeVisitor[None], CheckerPluginInterface):
                 rvalue_type = self.expr_checker.accept(rvalue)
                 if not inferred.is_final:
                     rvalue_type = remove_instance_last_known_values(rvalue_type)
+                print('XXX check_assignment T')
                 self.infer_variable_type(inferred, lvalue, rvalue_type, rvalue)
+                print('XXX check_assignment U')
 
     # (type, operator) tuples for augmented assignments supported with partial types
     partial_type_augmented_ops = {
@@ -2805,7 +2875,11 @@ class TypeChecker(NodeVisitor[None], CheckerPluginInterface):
                             init_type: Type, context: Context) -> None:
         """Infer the type of initialized variables from initializer type."""
         init_type = get_proper_type(init_type)
-        if isinstance(init_type, DeletedType):
+        print('XZYZ inference rhs type', init_type)
+        # XYZZY: Note sidestep of elif (deleted_as_rvalue)
+        if init_type is None or isinstance(init_type, DeletedType): #isinstance(init_type, UnboundType): #XYZZY
+            self.msg.warn_may_raise_unbound_local_error(init_type.name, context)
+        elif isinstance(init_type, DeletedType):
             self.msg.deleted_as_rvalue(init_type, context)
         elif not is_valid_inferred_type(init_type) and not self.no_partial_types:
             # We cannot use the type of the initialization expression for full type
@@ -2827,11 +2901,13 @@ class TypeChecker(NodeVisitor[None], CheckerPluginInterface):
             # Make the type more general (strip away function names etc.).
             init_type = strip_type(init_type)
 
+            print('XXX infer_variable_type: setting type of {} via {} to {}'.format(name, lvalue, init_type))
             self.set_inferred_type(name, lvalue, init_type)
 
     def infer_partial_type(self, name: Var, lvalue: Lvalue, init_type: Type) -> bool:
         init_type = get_proper_type(init_type)
         if isinstance(init_type, NoneType):
+            print('XXX infer_partial_type None')
             partial_type = PartialType(None, name)
         elif isinstance(init_type, Instance):
             fullname = init_type.type.fullname
@@ -2892,6 +2968,7 @@ class TypeChecker(NodeVisitor[None], CheckerPluginInterface):
         Store the type to both the variable node and the expression node that
         refers to the variable (lvalue). If var is None, do nothing.
         """
+        print('set_inferred_type: --- STORING INFERENCE:', str(var), str(lvalue), str(type))
         if var and not self.current_node_deferred:
             var.type = type
             var.is_inferred = True
@@ -3194,6 +3271,7 @@ class TypeChecker(NodeVisitor[None], CheckerPluginInterface):
         """Type check an if statement."""
         # This frame records the knowledge from previous if/elif clauses not being taken.
         # Fall-through to the original frame is handled explicitly in each block.
+        print('\nVISITING IF')
         with self.binder.frame_context(can_skip=False, fall_through=0):
             for e, b in zip(s.expr, s.body):
                 t = get_proper_type(self.expr_checker.accept(e))
@@ -3202,8 +3280,11 @@ class TypeChecker(NodeVisitor[None], CheckerPluginInterface):
                     self.msg.deleted_as_rvalue(t, s)
 
                 if_map, else_map = self.find_isinstance_check(e)
+                print('IF-MAP: {}'.format({str(k):v for k, v in (if_map.items() if if_map else [])}))
+                print('ELSE-MAP: {}'.format({str(k):v for k, v in (else_map.items() if else_map else [])}))
 
                 # XXX Issue a warning if condition is always False?
+                print('---- VISITING BODY', [str(x) for x in self.type_map])
                 with self.binder.frame_context(can_skip=True, fall_through=2):
                     self.push_type_map(if_map)
                     self.accept(b)
@@ -3211,7 +3292,11 @@ class TypeChecker(NodeVisitor[None], CheckerPluginInterface):
                 # XXX Issue a warning if condition is always True?
                 self.push_type_map(else_map)
 
-            with self.binder.frame_context(can_skip=False, fall_through=2):
+            print('---- PRE VISITING ELSE', [str(x) for x in self.type_map])
+            print([f.types for f in self.binder.frames])
+            print('---- VISITING ELSE')
+            # XXXXXXX: Changed can_skip from False to True
+            with self.binder.frame_context(can_skip=True, fall_through=2):
                 if s.else_body:
                     self.accept(s.else_body)
 
@@ -3368,7 +3453,24 @@ class TypeChecker(NodeVisitor[None], CheckerPluginInterface):
                                           'accept outside except: blocks even in '
                                           'python 2)'.format(var.name))
                             cast(Var, var.node).type = DeletedType(source=source)
-                            self.binder.cleanse(var)
+                            #self.binder.cleanse(var) #XYZZY
+
+                            # XYZZY
+                            if 0:
+                                lvalue = NameExpr(var.name)
+                                lvalue.node = var.node #'HACK'
+                                lvalue_type = rvalue_type = UnboundType(var.name)
+
+                                #self.scope.semantic_analyzer.analyze_name_lvalue(lvalue, explicit_type=True, is_final=False, escape_comprehensions=False)
+                                #var = self.scope.semantic_analyzer.get(lvalue)
+                                #var = self.expr_checker.analyze_var_ref(None, lvalue)
+                                #print('BOUND', var)
+
+                                with self.enter_final_context(False):
+                                    # self.check_assignment(lv, rvalue, s.type is None)
+                                    if not lvalue.is_special_form:
+                                        self.binder.assign_type(lvalue, rvalue_type, lvalue_type, False)
+
             if s.else_body:
                 self.accept(s.else_body)
 
@@ -3423,14 +3525,18 @@ class TypeChecker(NodeVisitor[None], CheckerPluginInterface):
 
     def visit_for_stmt(self, s: ForStmt) -> None:
         """Type check a for statement."""
-        if s.is_async:
-            iterator_type, item_type = self.analyze_async_iterable_item_type(s.expr)
-        else:
-            iterator_type, item_type = self.analyze_iterable_item_type(s.expr)
-        s.inferred_item_type = item_type
-        s.inferred_iterator_type = iterator_type
-        self.analyze_index_variables(s.index, item_type, s.index_type is None, s)
-        self.accept_loop(s.body, s.else_body)
+        # THL: Added with, since can_skip (if loop doesn't iterate).
+        # See testUnboundLocalFor.
+        # FIXME/TODO: Can we detect whether it will iterate?
+        with self.binder.frame_context(can_skip=True, fall_through=0):
+            if s.is_async:
+                iterator_type, item_type = self.analyze_async_iterable_item_type(s.expr)
+            else:
+                iterator_type, item_type = self.analyze_iterable_item_type(s.expr)
+            s.inferred_item_type = item_type
+            s.inferred_iterator_type = iterator_type
+            self.analyze_index_variables(s.index, item_type, s.index_type is None, s)
+            self.accept_loop(s.body, s.else_body)
 
     def analyze_async_iterable_item_type(self, expr: Expression) -> Tuple[Type, Type]:
         """Analyse async iterable expression and return iterator and iterator item types."""
@@ -3499,11 +3605,18 @@ class TypeChecker(NodeVisitor[None], CheckerPluginInterface):
             c.column = s.column
             self.expr_checker.accept(c, allow_none_return=True)
         else:
+            print('*'*70+'\nCHECKING DEL', s.line, s.expr.line) #import pdb; pdb.set_trace()
             s.expr.accept(self.expr_checker)
             for elt in flatten(s.expr):
+                print('[CHECKING DEL] --->', elt)
                 if isinstance(elt, NameExpr):
-                    self.binder.assign_type(elt, DeletedType(source=elt.name),
-                                            get_declaration(elt), False)
+                    if isinstance(self.binder.get(elt), DeletedType):
+                        self.msg.warn_may_raise_unbound_local_error(
+                            elt.name, s)
+                    else:
+                        self.binder.assign_type(
+                            elt, DeletedType(source=elt.name),
+                            get_declaration(elt), False)
 
     def visit_decorator(self, e: Decorator) -> None:
         for d in e.decorators:
@@ -4805,6 +4918,25 @@ class TypeChecker(NodeVisitor[None], CheckerPluginInterface):
         else:
             for expr, type in type_map.items():
                 self.binder.put(expr, type)
+                # XYZZY
+                if 1: pass
+                elif self.binder.get(expr) is None:
+                    self.binder.put(expr, type)
+                else:
+                    lvalue = expr#NameExpr(undef_name)
+                    #lvalue.node = var.node #'HACK'
+                    lvalue_type = rvalue_type = type #UnboundType(expr.name)
+
+                    #self.scope.semantic_analyzer.analyze_name_lvalue(lvalue, explicit_type=True, is_final=False, escape_comprehensions=False)
+                    #var = self.scope.semantic_analyzer.get(lvalue)
+                    #var = self.expr_checker.analyze_var_ref(None, lvalue)
+                    #print('BOUND', var)
+
+                    with self.enter_final_context(False):
+                        # self.check_assignment(lv, rvalue, s.type is None)
+                        if not lvalue.is_special_form:
+                            print('XXX IF-BINDING:', expr.name) 
+                            self.binder.assign_type(lvalue, rvalue_type, lvalue_type, False)
 
     def infer_issubclass_maps(self, node: CallExpr,
                               expr: Expression,

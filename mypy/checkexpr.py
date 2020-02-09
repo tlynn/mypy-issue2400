@@ -20,6 +20,7 @@ from mypy.types import (
     is_named_instance, FunctionLike,
     StarType, is_optional, remove_optional, is_generic_instance, get_proper_type, ProperType,
     get_proper_types, flatten_nested_unions
+    ,UnboundType  # FIXME
 )
 from mypy.nodes import (
     NameExpr, RefExpr, Var, FuncDef, OverloadedFuncDef, TypeInfo, CallExpr,
@@ -172,6 +173,7 @@ class ExpressionChecker(ExpressionVisitor[Type]):
         """
         self.chk.module_refs.update(extract_refexpr_names(e))
         result = self.analyze_ref_expr(e)
+        print('CHKRES', e, e.get_line(), result, e.node)
         return self.narrow_type_from_binder(e, result)
 
     def analyze_ref_expr(self, e: RefExpr, lvalue: bool = False) -> Type:
@@ -237,6 +239,7 @@ class ExpressionChecker(ExpressionVisitor[Type]):
         return result
 
     def analyze_var_ref(self, var: Var, context: Context) -> Type:
+        print('XXX analyze_var_ref', var, var.type, get_proper_type(var.type) if var.type else None)
         if var.type:
             var_type = get_proper_type(var.type)
             if isinstance(var_type, Instance):
@@ -4016,6 +4019,18 @@ class ExpressionChecker(ExpressionVisitor[Type]):
         """
         if literal(expr) >= LITERAL_TYPE:
             restriction = self.chk.binder.get(expr)
+            #if isinstance(restriction, UnboundType):
+            if restriction is None or isinstance(restriction, DeletedType):
+                if expr.line < 0: 1/0
+                print('RESTRICTION: UB', expr.name, restriction.__class__, dir(expr), expr.get_line())
+                #1/0
+                #self.msg.warn_may_raise_unbound_local_error(restriction.name, expr)
+                if self.chk.is_local(expr.name):
+                    self.msg.warn_may_raise_unbound_local_error(expr.name, expr)
+                else:
+                    print('NOT A LOCAL:', expr.name)
+            else:
+                print('RESTRICTION: OK', expr.name, restriction.__class__, dir(expr), expr.get_line())
             # If the current node is deferred, some variables may get Any types that they
             # otherwise wouldn't have. We don't want to narrow down these since it may
             # produce invalid inferred Optional[Any] types, at least.

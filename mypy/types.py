@@ -719,6 +719,10 @@ class DeletedType(ProperType):
         return DeletedType(data['source'])
 
 
+#class UnboundType(DeletedType):
+#    """A variable that hasn't been instantiated yet."""
+
+
 # Fake TypeInfo to be used as a placeholder during Instance de-serialization.
 NOT_READY = mypy.nodes.FakeInfo('De-serialization failure: TypeInfo not fixed')  # type: Final
 

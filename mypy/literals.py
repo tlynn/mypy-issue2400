@@ -133,9 +133,12 @@ class _Hasher(ExpressionVisitor[Optional[Key]]):
         return ('Unary', e.op, literal_hash(e.expr))
 
     def seq_expr(self, e: Union[ListExpr, TupleExpr, SetExpr], name: str) -> Optional[Key]:
-        if all(literal(x) == LITERAL_YES for x in e.items):
+        # THL: Attempt to support "(a,b,c,d)". Was:
+        #if all(literal(x) == LITERAL_YES for x in e.items):
+        if all(literal(x) != LITERAL_NO for x in e.items):
             rest = tuple(literal_hash(x) for x in e.items)  # type: Any
             return (name,) + rest
+        print('YYY seq_expr None', [literal(x) for x in e.items])
         return None
 
     def visit_list_expr(self, e: ListExpr) -> Optional[Key]:
@@ -146,6 +149,7 @@ class _Hasher(ExpressionVisitor[Optional[Key]]):
             rest = tuple((literal_hash(a) if a else None, literal_hash(b))
                          for a, b in e.items)  # type: Any
             return ('Dict',) + rest
+        print('YYY dict_expr None')
         return None
 
     def visit_tuple_expr(self, e: TupleExpr) -> Optional[Key]:
@@ -157,84 +161,111 @@ class _Hasher(ExpressionVisitor[Optional[Key]]):
     def visit_index_expr(self, e: IndexExpr) -> Optional[Key]:
         if literal(e.index) == LITERAL_YES:
             return ('Index', literal_hash(e.base), literal_hash(e.index))
+        print('YYY index_expr None')
         return None
 
     def visit_assignment_expr(self, e: AssignmentExpr) -> None:
+        print('YYY assignment_expr None')
         return None
 
     def visit_call_expr(self, e: CallExpr) -> None:
+        print('YYY call_expr None')
         return None
 
     def visit_slice_expr(self, e: SliceExpr) -> None:
+        print('YYY slice_expr None')
         return None
 
     def visit_cast_expr(self, e: CastExpr) -> None:
+        print('YYY cast_expr None')
         return None
 
     def visit_conditional_expr(self, e: ConditionalExpr) -> None:
+        print('YYY conditional_expr None')
         return None
 
     def visit_ellipsis(self, e: EllipsisExpr) -> None:
+        print('YYY ellipsis None')
         return None
 
     def visit_yield_from_expr(self, e: YieldFromExpr) -> None:
+        print('YYY yield_from_expr None')
         return None
 
     def visit_yield_expr(self, e: YieldExpr) -> None:
+        print('YYY yield_expr None')
         return None
 
     def visit_reveal_expr(self, e: RevealExpr) -> None:
+        print('YYY reveal_expr None')
         return None
 
     def visit_super_expr(self, e: SuperExpr) -> None:
+        print('YYY super_expr None')
         return None
 
     def visit_type_application(self, e: TypeApplication) -> None:
+        print('YYY type_application None')
         return None
 
     def visit_lambda_expr(self, e: LambdaExpr) -> None:
+        print('YYY lambda_expr None')
         return None
 
     def visit_list_comprehension(self, e: ListComprehension) -> None:
+        print('YYY list_comprehension None')
         return None
 
     def visit_set_comprehension(self, e: SetComprehension) -> None:
+        print('YYY set_comprehension None')
         return None
 
     def visit_dictionary_comprehension(self, e: DictionaryComprehension) -> None:
+        print('YYY dictionary_comprehension None')
         return None
 
     def visit_generator_expr(self, e: GeneratorExpr) -> None:
+        print('YYY generator_expr None')
         return None
 
     def visit_backquote_expr(self, e: BackquoteExpr) -> None:
+        print('YYY backquote_expr None')
         return None
 
     def visit_type_var_expr(self, e: TypeVarExpr) -> None:
+        print('YYY type_var_expr None')
         return None
 
     def visit_type_alias_expr(self, e: TypeAliasExpr) -> None:
+        print('YYY type_alias_expr None')
         return None
 
     def visit_namedtuple_expr(self, e: NamedTupleExpr) -> None:
+        print('YYY namedtuple_expr None')
         return None
 
     def visit_enum_call_expr(self, e: EnumCallExpr) -> None:
+        print('YYY enum_call_expr None')
         return None
 
     def visit_typeddict_expr(self, e: TypedDictExpr) -> None:
+        print('YYY typeddict_expr None')
         return None
 
     def visit_newtype_expr(self, e: NewTypeExpr) -> None:
+        print('YYY newtype_expr None')
         return None
 
     def visit__promote_expr(self, e: PromoteExpr) -> None:
+        print('YYY promote_expr None')
         return None
 
     def visit_await_expr(self, e: AwaitExpr) -> None:
+        print('YYY await_expr None')
         return None
 
     def visit_temp_node(self, e: TempNode) -> None:
+        print('YYY temp_node None')
         return None
 
 

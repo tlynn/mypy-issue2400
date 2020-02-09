@@ -65,7 +65,7 @@ class LocalsCollector(TraverserVisitor):
 
     def __init__(self, options: Options) -> None:
         self.options = options
-        self.locals = set()
+        self.locals = {}
         self.started = False
 
     def visit_list_comprehension(self, o: ListComprehension) -> None:
@@ -79,20 +79,20 @@ class LocalsCollector(TraverserVisitor):
             for index, sequence, conditions in zip(g.indices, g.sequences,
                                                    g.condlists):
                 sequence.accept(self)
-                self.locals.update(_get_lvalue_names(index))
+                self.locals.update(_get_lvalues(index))
                 for cond in conditions:
                     cond.accept(self)
             g.left_expr.accept(self)
 
     def visit_assignment_stmt(self, o: AssignmentStmt) -> None:
         for lvalue in o.lvalues:
-            self.locals.update(_get_lvalue_names(lvalue))
+            self.locals.update(_get_lvalues(lvalue))
 
     def visit_operator_assignment_stmt(self, o: OperatorAssignmentStmt) -> None:
-        self.locals.update(_get_lvalue_names(o.lvalue))
+        self.locals.update(_get_lvalues(o.lvalue))
 
     def visit_for_stmt(self, o: ForStmt) -> None:
-        self.locals.update(_get_lvalue_names(o.index))
+        self.locals.update(_get_lvalues(o.index))
         super().visit_for_stmt(o)
 
     def visit_func_def(self, o: FuncDef) -> None:
@@ -104,14 +104,14 @@ class LocalsCollector(TraverserVisitor):
     def visit_with_stmt(self, o: WithStmt) -> None:
         for i in range(len(o.expr)):
             if o.target[i] is not None:
-                self.locals.update(_get_lvalue_names(o.target[i]))
+                self.locals.update(_get_lvalues(o.target[i]))
         super().visit_with_stmt(o)
 
     def visit_try_stmt(self, o: TryStmt) -> None:
         for i in range(len(o.types)):
             v = o.vars[i]
             if v is not None:
-                self.locals.add(v.name)
+                self.locals.update(_get_lvalues(v))
         super().visit_try_stmt(o)
 
     def visit_import(self, o: Import) -> None:
@@ -125,14 +125,15 @@ class LocalsCollector(TraverserVisitor):
         super().visit_import_from(o)
 
     def visit_del_stmt(self, o: DelStmt) -> None:
-        self.locals.update(_get_lvalue_names(o.expr))
+        self.locals.update(_get_lvalues(o.expr))
         super().visit_del_stmt(o)
 
 
-def _get_lvalue_names(lvalue: Lvalue) -> Set[str]:
+def _get_lvalues(lvalue: Lvalue) -> Set[str]:
     def walk(x):
         if isinstance(x, NameExpr):
-            result.add(x.name)
+            print('FOUND LOCAL', x.name, x.node, repr(x.node))
+            result[x.name] = x
         elif isinstance(x, TupleExpr):
             for child in x.items:
                 walk(child)
@@ -142,7 +143,7 @@ def _get_lvalue_names(lvalue: Lvalue) -> Set[str]:
         else:
             assert isinstance(x, (MemberExpr, IndexExpr, SuperExpr)), type(x)
 
-    result = set()
+    result = {}
     walk(lvalue)
     return result
 
@@ -153,7 +154,7 @@ def _get_globals(o: Node) -> Set[str]:
     return collector.globals
 
 
-def _get_locals(o: Node, options: Options) -> Set[str]:
+def _get_locals(o: Node, options: Options) -> Dict[str, NameExpr]:
     collector = LocalsCollector(options)
     o.accept(collector)
     return collector.locals

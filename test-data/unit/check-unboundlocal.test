@@ -4,62 +4,91 @@
 -- TODO: Check for NameErrors (unbound globals)?
 -- TODO: Python 2 versions of list comprehension tests (problem in tests).
 -- TODO: Python 2: Infer assignment when iterating over a non-empty literal?
+-- TODO: Add tests that locals in if/elif/while conditions get checked.
+-- TODO: Test "with".
+-- TODO: Test "async with" and "async for". (PEP 492)
 
-[case testUnboundLocalJustDel]
+[case testUnboundLocalDel1]
 def f():
     del x  # N: May raise UnboundLocalError: local variable 'x' referenced before assignment
 
-[case testUnboundLocalIfArg]
+[case testUnboundLocalDel2]
 def f(arg):
-    if arg:
-        x = 1
+    x = 1
+    del x
     x  # N: May raise UnboundLocalError: local variable 'x' referenced before assignment
 
-[case testUnboundLocalIf0]
+[case testUnboundLocalDel3]
 def f():
-    if 0:
-        x = 1
-    x  # N: May raise UnboundLocalError: local variable 'x' referenced before assignment
-
-[case testUnboundLocalIf1]
-def f():
-    if 1:
-        pass
-    else:
-        x = 1
-    x  # N: May raise UnboundLocalError: local variable 'x' referenced before assignment
-
-[case testUnboundLocalIf1b]
-def f():
-    if 1:
-        a = b = 2
-    del b
+    a, b, c, d = 'abcd'
+    del ((b, c))
     a
     b  # N: May raise UnboundLocalError: local variable 'b' referenced before assignment
+    c  # N: May raise UnboundLocalError: local variable 'c' referenced before assignment
+    d
+    del a
+    del b  # N: May raise UnboundLocalError: local variable 'b' referenced before assignment
+    del c  # N: May raise UnboundLocalError: local variable 'c' referenced before assignment
+    del d
 
-[case testUnboundLocalIfSysExit]
-def f(arg):
+[builtins fixtures/tuple.pyi]
+
+[case testUnboundLocalIfArg]
+from typing import Any
+
+def f(arg: Any):
     if arg:
         x = 1
-    else:
-        y = 1
-        sys.exit()
-    x
-    y  # N: May raise UnboundLocalError: local variable 'y' referenced before assignment
-
-[case testUnboundLocalIfFalse]
-def f():
-    if False:
-        x = 1
     x  # N: May raise UnboundLocalError: local variable 'x' referenced before assignment
 
-[case testUnboundLocalIfTrue]
-def f():
-    if True:
-        pass
-    else:
-        x = 1
-    x  # N: May raise UnboundLocalError: local variable 'x' referenced before assignment
+-- FIXME: TODO: When "if 0" is constant
+--[case testUnboundLocalIf0]
+--def f():
+--    if 0:
+--        x = 1
+--    x  # N: May raise UnboundLocalError: local variable 'x' referenced before assignment
+
+-- FIXME: TODO: When "if 1" is constant
+--[case testUnboundLocalIf1]
+--def f():
+--    if 1:
+--        pass
+--    else:
+--        x = 1
+--    x  # N: May raise UnboundLocalError: local variable 'x' referenced before assignment
+
+-- FIXME: TODO: When "if 1" is constant
+--[case testUnboundLocalIf1b]
+--def f():
+--    if 1:
+--        a = b = 2
+--    del b
+--    a
+--    b  # N: May raise UnboundLocalError: local variable 'b' referenced before assignment
+
+--[case testUnboundLocalIfSysExit]
+--def f(arg):
+--    if arg:
+--        x = 1
+--    else:
+--        y = 1
+--        sys.exit()
+--    x
+--    y  # N: May raise UnboundLocalError: local variable 'y' referenced before assignment
+
+--[case testUnboundLocalIfFalse]
+--def f():
+--    if False:
+--        x = 1
+--    x  # N: May raise UnboundLocalError: local variable 'x' referenced before assignment
+
+--[case testUnboundLocalIfTrue]
+--def f():
+--    if True:
+--        pass
+--    else:
+--        x = 1
+--    x  # N: May raise UnboundLocalError: local variable 'x' referenced before assignment
 
 [case testUnboundLocalListComprehension]
 def f(arg):
@@ -80,6 +109,16 @@ def f(arg):
 [builtins fixtures/list.pyi]
 
 [case testUnboundLocalListComprehension3]
+x = 1
+
+def f(arg):
+    [x for x in arg]  # x is not a local in Py3
+    return x
+
+# This doesn't work in Py2 so we can't run test that this is detected.
+[builtins fixtures/list.pyi]
+
+[case testUnboundLocalListComprehension4]
 def f(arg):
     x, y, z = 1, 2, 3
     del x, y, z
@@ -90,16 +129,16 @@ def f(arg):
 
 [builtins fixtures/list.pyi]
 
-[case testUnboundLocalListComprehension4]
+[case testUnboundLocalListComprehension5]
 def f():
     a, b, c = 1, 2, 3
     del a, b, c
-    # Misuse b but don't flag it in Python 3 since not a local
-    [c for a in b for b in [1]]  # N: May raise UnboundLocalError: local variable 'c' referenced before assignment
+    # Misuse b and c.
+    [c for a in b for b in [1]]  # N: May raise UnboundLocalError: local variable 'c' referenced before assignment  # N: May raise UnboundLocalError: local variable 'b' referenced before assignment
 
 [builtins fixtures/list.pyi]
 
-[case testUnboundLocalListComprehension5]
+[case testUnboundLocalListComprehension6]
 def f(arg):
     e, es = 1, 1
     del e, es
@@ -107,21 +146,25 @@ def f(arg):
 
 [builtins fixtures/list.pyi]
 
-[case testUnboundLocalGeneratorExpr]
+[case testUnboundLocalGeneratorExprPy3]
 def f(arg):
     x = 1
     del x
     set(1 for x in arg)
     return x  # N: May raise UnboundLocalError: local variable 'x' referenced before assignment
 
-[case testUnboundLocalGeneratorExpr2]
+[builtins fixtures/set.pyi]
+
+[case testUnboundLocalGeneratorExpr2Py3]
 def f(arg):
     x = 1
     del x
     set(x for x in arg)
     return x  # N: May raise UnboundLocalError: local variable 'x' referenced before assignment
 
-[case testUnboundLocalGeneratorExpr3]
+[builtins fixtures/set.pyi]
+
+[case testUnboundLocalGeneratorExpr3Py3]
 def f(arg):
     x, y, z = 1, 2, 3
     del x, y, z
@@ -131,28 +174,33 @@ def f(arg):
     set((z, other) for x, y in arg)  # N: May raise UnboundLocalError: local variable 'z' referenced before assignment
     return x, y  # N: May raise UnboundLocalError: local variable 'x' referenced before assignment  # N: May raise UnboundLocalError: local variable 'y' referenced before assignment
 
-[case testUnboundLocalGeneratorExpr4]
+[builtins fixtures/set.pyi]
+
+[case testUnboundLocalGeneratorExpr4Py3]
 def f(arg):
     a, b, c = 1, 2, 3
     del a, b, c
-    # Misuse b but don't flag it in Python 3 since not a local
-    set(c for a in b for b in arg)  # N: May raise UnboundLocalError: local variable 'c' referenced before assignment
+    # Misuse b and c.
+    set(c for a in b for b in arg)  # N: May raise UnboundLocalError: local variable 'c' referenced before assignment  # N: May raise UnboundLocalError: local variable 'b' referenced before assignment
 
 [builtins fixtures/list.pyi]
+[builtins fixtures/set.pyi]
 
-[case testUnboundLocalGeneratorExpr5]
+[case testUnboundLocalGeneratorExpr5Py3]
 def f(arg):
     e, es = 1, 1
     del e, es
     set(e for es in arg for e in es)
 
+[builtins fixtures/set.pyi]
 
 [case testUnboundLocalGeneratorExprPy2]
 # flags: --py2
 def f(arg):
     x = 1
     del x
-    set(1 for x in arg)
+    # FIXME: TODO: Using a loop because fixtures don't work with --py2
+    for _ in (1 for x in arg): pass
     return x  # N: May raise UnboundLocalError: local variable 'x' referenced before assignment
 
 [case testUnboundLocalGeneratorExpr2Py2]
@@ -160,7 +208,8 @@ def f(arg):
 def f(arg):
     x = 1
     del x
-    set(x for x in arg)
+    # FIXME: TODO: Using a loop because fixtures don't work with --py2
+    for _ in (x for x in arg): pass
     return x  # N: May raise UnboundLocalError: local variable 'x' referenced before assignment
 
 # testUnboundLocalGeneratorExpr3 would be a syntax error in Python 2!
@@ -170,16 +219,17 @@ def f(arg):
 def f(arg):
     a, b, c = 1, 2, 3
     del a, b, c
-    # Misuse b but don't flag it in Python 3 since not a local
-    set(c for a in b for b in arg)  # N: May raise UnboundLocalError: local variable 'c' referenced before assignment
+    # Misuse b and c.
+    # FIXME: TODO: Using a loop because fixtures don't work with --py2
+    for _ in (c for a in b for b in arg): pass  # N: May raise UnboundLocalError: local variable 'c' referenced before assignment  # N: May raise UnboundLocalError: local variable 'b' referenced before assignment
 
 [case testUnboundLocalGeneratorExpr5Py2]
 # flags: --py2
 def f(arg):
     e, es = 1, 1
     del e, es
-    set(e for es in arg for e in es)
-
+    # FIXME: TODO: Using a loop because fixtures don't work with --py2
+    for _ in (e for es in arg for e in es): pass
 
 [case testUnboundLocalWhile1]
 def f(arg):
@@ -225,13 +275,38 @@ def f(arg, arg2):
     if arg:
         x, y = 1, 1
     elif arg2:
-        if 1:
-            x = 2
+--        if 1:
+--            x = 2
+-- Replaced with next line
+        x = 2
         y = 2
     else:
         y = 3
     x  # N: May raise UnboundLocalError: local variable 'x' referenced before assignment
     y
+
+[case testUnboundLocalDelWithinIf]
+def f(arg):
+    e = 1
+    if arg:
+        del e
+    e  # N: May raise UnboundLocalError: local variable 'e' referenced before assignment
+
+[case testUnboundLocalDelWithinElse]
+def f(arg):
+    if arg:
+        e = 1
+    else:
+        del e
+    e  # N: May raise UnboundLocalError: local variable 'e' referenced before assignment
+
+[case testUnboundLocalDelWithinElif]
+def f(arg, arg2):
+    if arg:
+        e = 1
+    elif arg2:
+        del e
+    e  # N: May raise UnboundLocalError: local variable 'e' referenced before assignment
 
 [case testUnboundLocalIfComplicated]
 def f(arg, arg2, arg3, arg4):
@@ -259,23 +334,10 @@ def f(arg, arg2, arg3, arg4):
 
 [case testUnboundLocalFor]
 def f(arg):
-    for x in range(arg):
+    for x in arg:
         y = 1
     x  # N: May raise UnboundLocalError: local variable 'x' referenced before assignment
     y  # N: May raise UnboundLocalError: local variable 'y' referenced before assignment
-
-[case testUnboundLocalDel]
-def f():
-    a, b, c, d = 'abcd'
-    del ((b, c))
-    a
-    b  # N: May raise UnboundLocalError: local variable 'b' referenced before assignment
-    c  # N: May raise UnboundLocalError: local variable 'c' referenced before assignment
-    d
-    del a
-    del b  # N: May raise UnboundLocalError: local variable 'b' referenced before assignment
-    del c  # N: May raise UnboundLocalError: local variable 'c' referenced before assignment
-    del d
 
 [case testUnboundLocalArgDelDel]
 def f(arg):

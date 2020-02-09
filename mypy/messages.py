@@ -1090,6 +1090,11 @@ class MessageBuilder:
         else:
             needed = 'comment'
 
+        #print('XXXZZ', node.type)
+        #1/0
+        #if 0: #hasattr(node.type.type, 'special_fixme'):  # FIXME
+        #    self.warn_may_raise_unbound_local_error(unmangle(node.name()), context)
+        #    return
         self.fail("Need type {} for '{}'{}".format(needed, unmangle(node.name), hint), context,
                   code=codes.VAR_ANNOTATED)
 

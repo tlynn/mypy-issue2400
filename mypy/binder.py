@@ -6,6 +6,7 @@ from typing_extensions import DefaultDict
 
 from mypy.types import (
     Type, AnyType, PartialType, UnionType, TypeOfAny, NoneType, get_proper_type
+,DeletedType #GGG
 )
 from mypy.subtypes import is_subtype
 from mypy.join import join_simple
@@ -114,20 +115,26 @@ class ConditionalTypeBinder:
         f = Frame()
         self.frames.append(f)
         self.options_on_return.append([])
+        print('XXX binder POST-PUSH', [[str(t[1]) for t in f.types] for f in self.frames])
         return f
 
     def _put(self, key: Key, type: Type, index: int = -1) -> None:
+        print('XXX binder _put', str(key[1]), key, type.__class__)
         self.frames[index].types[key] = type
 
     def _get(self, key: Key, index: int = -1) -> Optional[Type]:
         if index < 0:
             index += len(self.frames)
         for i in range(index, -1, -1):
+            print('XXX binder _get: seeking', str(key[1]), key, 'in', [(str(k[1]), k) for k in self.frames[i].types])
             if key in self.frames[i].types:
+                print('XXX binder _get: found', str(key[1]), self.frames[i].types[key])
                 return self.frames[i].types[key]
+        print('XXX binder _get: failed', str(key[1]), None)
         return None
 
     def put(self, expr: Expression, typ: Type) -> None:
+        print('XXX binder put', expr, type(typ))
         if not isinstance(expr, (IndexExpr, MemberExpr, NameExpr)):
             return
         if not literal(expr):
@@ -138,6 +145,7 @@ class ConditionalTypeBinder:
             self.declarations[key] = get_declaration(expr)
             self._add_dependencies(key)
         self._put(key, typ)
+        print('XXX binder POST-PUT', [str(t[1]) for t in self.frames[-1].types])
 
     def unreachable(self) -> None:
         self.frames[-1].unreachable = True
@@ -147,8 +155,11 @@ class ConditionalTypeBinder:
 
     def get(self, expr: Expression) -> Optional[Type]:
         key = literal_hash(expr)
+        print('XXX binder get', expr, 'key='+repr(key), type(key))
         assert key is not None, 'Internal error: binder tried to get non-literal'
-        return self._get(key)
+        rv = self._get(key)
+        print('XXX binder get', expr, 'key='+repr(key), type(key), '->', rv)
+        return rv
 
     def is_unreachable(self) -> bool:
         # TODO: Copy the value of unreachable into new frames to avoid
@@ -183,6 +194,7 @@ class ConditionalTypeBinder:
         changed = False
         keys = set(key for f in frames for key in f.types)
 
+        print('UUU update_from_options: keys:', [str(k[1]) for k in keys])
         for key in keys:
             current_value = self._get(key)
             resulting_values = [f.types.get(key, current_value) for f in frames]
@@ -192,6 +204,7 @@ class ConditionalTypeBinder:
                 # know anything about key in at least one possible frame.
                 continue
 
+            print('UUU update_from_options:', key, key[1].name(), resulting_values)
             type = resulting_values[0]
             assert type is not None
             declaration_type = get_proper_type(self.declarations.get(key))
@@ -208,6 +221,7 @@ class ConditionalTypeBinder:
                 changed = True
 
         self.frames[-1].unreachable = not frames
+        print('---- UNREACHABLE?', self.frames[-1].unreachable)
 
         return changed
 
@@ -220,13 +234,16 @@ class ConditionalTypeBinder:
         if fall_through > 0:
             self.allow_jump(-fall_through)
 
+        print('XXX PRE-POP', [str(t[1]) for t in self.frames[-1].types])
         result = self.frames.pop()
+        print('XXX POP', [str(t[1]) for t in result.types])
         options = self.options_on_return.pop()
 
         if can_skip:
             options.insert(0, self.frames[-1])
 
         self.last_pop_changed = self.update_from_options(options)
+        print('XXX pop_frame returning. lpc=%s'%self.last_pop_changed, vars(result))
 
         return result
 
@@ -249,6 +266,9 @@ class ConditionalTypeBinder:
                     type: Type,
                     declared_type: Optional[Type],
                     restrict_any: bool = False) -> None:
+        print('XXX assign_type', expr, repr(type.__class__)) #; 1/0
+        #if 'Deleted' in repr(type.__class__): 1/0
+
         # We should erase last known value in binder, because if we are using it,
         # it means that the target is not final, and therefore can't hold a literal.
         type = remove_instance_last_known_values(type)
@@ -266,6 +286,13 @@ class ConditionalTypeBinder:
         if not literal(expr):
             return
         self.invalidate_dependencies(expr)
+
+        # GGG THL Added {
+        if isinstance(type, DeletedType):
+            print("GGG binder: DELETED", expr)
+            self.put(expr, type)
+            return
+        # GGG }
 
         if declared_type is None:
             # Not sure why this happens.  It seems to mainly happen in
@@ -317,6 +344,8 @@ class ConditionalTypeBinder:
             # XXX This should probably not copy the entire frame, but
             # just copy this variable into a single stored frame.
             self.allow_jump(i)
+#        import pdb; pdb.set_trace()
+        print('XXX binder POST-PUT2', [[str(t[1]) for t in f.types] for f in self.frames])
 
     def invalidate_dependencies(self, expr: BindableExpression) -> None:
         """Invalidate knowledge of types that include expr, but not expr itself.
