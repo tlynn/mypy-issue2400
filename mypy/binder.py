@@ -44,6 +44,9 @@ class Frame:
         # need this field.
         self.suppress_unreachable_warnings = False
 
+        # Another hack: Don't warn about these being unbound.
+        self.imported_names = []
+
 
 Assigns = DefaultDict[Expression, List[Tuple[Type, Optional[Type]]]]
 
@@ -118,6 +121,9 @@ class ConditionalTypeBinder:
         print('XXX binder POST-PUSH', [[str(k[1]) for k in f.types] for f in self.frames])
         return f
 
+    def mark_imported_name(self, name: str) -> None:
+        self.frames[-1].imported_names.append(name)
+
     def _put(self, key: Key, type: Type, index: int = -1) -> None:
         print('XXX binder _put', str(key[1]), key, type.__class__)
         self.frames[index].types[key] = type
@@ -127,6 +133,14 @@ class ConditionalTypeBinder:
             index += len(self.frames)
         for i in range(index, -1, -1):
             print('XXX binder _get: seeking', str(key[1]), key, 'in', [(str(k[1]), k) for k in self.frames[i].types])
+            for k in self.frames[i].types:
+                print('k1type:', type(k[1]), 'key1type:', type(key[1]))
+                print(str(k[1]), ('==' if str(k[1]) == str(key[1]) else '!='), str(key[1]))
+                if hasattr(k, 'node') and hasattr(key, 'node'):
+                    print(k.node, ('==' if k.node == key.node else '!='), key.node)
+                else:
+                    print('knode:', hasattr(k, 'node'), 'keynode:', hasattr(key, 'node'))
+                print(k, ('==' if k == key else '!='), key)
             if key in self.frames[i].types:
                 print('XXX binder _get: found', str(key[1]), self.frames[i].types[key])
                 return self.frames[i].types[key]
@@ -140,6 +154,7 @@ class ConditionalTypeBinder:
         if not literal(expr):
             return
         key = literal_hash(expr)
+        print('XXX binder put: key =', key)
         assert key is not None, 'Internal error: binder tried to put non-literal'
         if key not in self.declarations:
             self.declarations[key] = get_declaration(expr)
@@ -155,7 +170,9 @@ class ConditionalTypeBinder:
 
     def get(self, expr: Expression) -> Optional[Type]:
         key = literal_hash(expr)
-        print('XXX binder get', expr, 'key='+repr(key), type(key))
+        #unsafe next line (expr.node may not exist):
+        print('XXX binder get', expr, {x: getattr(expr, x) for x in dir(expr) if x[0]!='_' and 'info' not in x})
+        print('XXX binder get', expr, 'key='+str(key[1]), type(key))
         assert key is not None, 'Internal error: binder tried to get non-literal'
         rv = self._get(key)
         print('XXX binder get', expr, 'key='+repr(key), type(key), '->', rv)

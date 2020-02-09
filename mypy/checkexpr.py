@@ -4023,11 +4023,14 @@ class ExpressionChecker(ExpressionVisitor[Type]):
             if restriction is None or isinstance(restriction, DeletedType):
                 if expr.line < 0: 1/0
                 print('RESTRICTION: UB', expr.name, restriction.__class__, dir(expr), expr.get_line())
-                print('LOCAL?', self.chk.is_local(expr.name))
+                print('LOCAL?', expr, self.chk.is_local(expr.name))
                 #1/0
                 #self.msg.warn_may_raise_unbound_local_error(restriction.name, expr)
-                if self.chk.is_local(expr.name):
-                    self.msg.warn_may_raise_unbound_local_error(expr.name, expr)
+                if isinstance(expr, NameExpr) and self.chk.is_local(expr.name):
+                    imported_names = self.chk.binder.frames[-1].imported_names
+                    if expr.name not in imported_names:
+                        #1/0
+                        self.msg.warn_may_raise_unbound_local_error(expr.name, expr)
                 else:
                     print('NOT A LOCAL:', expr.name)
             else:

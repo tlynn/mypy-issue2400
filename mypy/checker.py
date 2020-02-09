@@ -298,7 +298,9 @@ class TypeChecker(NodeVisitor[None], CheckerPluginInterface):
             with self.enter_partial_types():
                 with self.binder.top_frame_context():
                     for d in self.tree.defs:
+                        print('CFP: checking', d)
                         self.accept(d)
+                        print('CFP: done checking', d)
 
             assert not self.current_node_deferred
 
@@ -814,7 +816,7 @@ class TypeChecker(NodeVisitor[None], CheckerPluginInterface):
         yield None
         self.inferred_attribute_types = old_types
 
-    def is_local(self, name):
+    def is_local(self, name: str) -> bool:
         return name in self.local_names
 
     def check_func_def(self, defn: FuncItem, typ: CallableType, name: Optional[str]) -> None:
@@ -2004,7 +2006,50 @@ class TypeChecker(NodeVisitor[None], CheckerPluginInterface):
         pass
 
     def check_import(self, node: ImportBase) -> None:
-        for assign in node.assignments:
+        print('XXXGGG check_import', node, 'asg:', node.assignments)
+        assert isinstance(node, (Import, ImportFrom, ImportAll))
+        assignments = node.assignments
+        if not assignments:
+            # We haven't generated the dummy assignments yet.
+            assignments = []
+            if isinstance(node, Import):
+                name_pairs = node.ids
+            elif isinstance(node, ImportFrom):
+                name_pairs = node.names
+            else:
+                # Give up.
+                name_pairs = []
+            for target, alias in name_pairs:
+                imported_id = alias or target
+                """
+                lvalue = NameExpr(imported_id)
+                lvalue.kind = existing_symbol.kind
+                lvalue.node = existing_symbol.node
+                rvalue = NameExpr(imported_id)
+                rvalue.kind = module_symbol.kind
+                rvalue.node = module_symbol.node
+                if isinstance(rvalue.node, TypeAlias):
+                    # Suppress bogus errors from the dummy assignment if rvalue is an alias.
+                    # Otherwise mypy may complain that alias is invalid in runtime context.
+                    rvalue.is_alias_rvalue = True
+                assignment = AssignmentStmt([lvalue], rvalue)
+                for n in assignment, lvalue, rvalue:
+                    n.set_line(node)
+                node.assignments.append(assignment)
+                """
+                #rvalue = NameExpr(imported_id)
+                #rvalue.kind = module_symbol.kind
+                #rvalue.node = Var(imported_id)
+                #rvalue = NameExpr('.'.join([node.id, imported_id]))
+                #for n in [rvalue]:#, rvalue.node:
+                #for n in rvalue, rvalue.node:
+                #    n.set_line(node)
+                #self.binder.put(
+                #    rvalue, AnyType(TypeOfAny.special_form))
+                self.binder.mark_imported_name(alias or target)
+
+        for assign in assignments:
+            print('XXXGGG check_import: assignment:', assign)
             lvalue = assign.lvalues[0]
             lvalue_type, _, __ = self.check_lvalue(lvalue)
             if lvalue_type is None:
@@ -2015,6 +2060,7 @@ class TypeChecker(NodeVisitor[None], CheckerPluginInterface):
             self.check_simple_assignment(lvalue_type, assign.rvalue, node,
                                          msg=message, lvalue_name='local name',
                                          rvalue_name='imported name')
+            print('XXXGGG check_import: checked assignment:', assign)
 
     #
     # Statements
