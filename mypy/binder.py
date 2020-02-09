@@ -115,7 +115,7 @@ class ConditionalTypeBinder:
         f = Frame()
         self.frames.append(f)
         self.options_on_return.append([])
-        print('XXX binder POST-PUSH', [[str(t[1]) for t in f.types] for f in self.frames])
+        print('XXX binder POST-PUSH', [[str(k[1]) for k in f.types] for f in self.frames])
         return f
 
     def _put(self, key: Key, type: Type, index: int = -1) -> None:
@@ -145,7 +145,7 @@ class ConditionalTypeBinder:
             self.declarations[key] = get_declaration(expr)
             self._add_dependencies(key)
         self._put(key, typ)
-        print('XXX binder POST-PUT', [str(t[1]) for t in self.frames[-1].types])
+        print('XXX binder POST-PUT', [str(k[1]) for k in self.frames[-1].types])
 
     def unreachable(self) -> None:
         self.frames[-1].unreachable = True
@@ -206,6 +206,7 @@ class ConditionalTypeBinder:
 
             print('UUU update_from_options:', key, key[1].name(), resulting_values)
             type = resulting_values[0]
+            print('UUU FIRST TYPE OF', key[1].name(), '=', type)
             assert type is not None
             declaration_type = get_proper_type(self.declarations.get(key))
             if isinstance(declaration_type, AnyType):
@@ -215,6 +216,9 @@ class ConditionalTypeBinder:
             else:
                 for other in resulting_values[1:]:
                     assert other is not None
+                    print('UUU JOIN', key[1].name(), '- OLD TYPE:', type,
+                          'WITH', other, '-> NEW TYPE:',
+                          join_simple(self.declarations[key], type, other))
                     type = join_simple(self.declarations[key], type, other)
             if current_value is None or not is_same_type(type, current_value):
                 self._put(key, type)
@@ -234,16 +238,18 @@ class ConditionalTypeBinder:
         if fall_through > 0:
             self.allow_jump(-fall_through)
 
-        print('XXX PRE-POP', [str(t[1]) for t in self.frames[-1].types])
+        print('XXX PRE-POP', [str(k[1]) for k in self.frames[-1].types])
         result = self.frames.pop()
-        print('XXX POP', [str(t[1]) for t in result.types])
+        print('XXX POP', [str(k[1]) for k in result.types])
         options = self.options_on_return.pop()
 
         if can_skip:
             options.insert(0, self.frames[-1])
 
         self.last_pop_changed = self.update_from_options(options)
-        print('XXX pop_frame returning. lpc=%s'%self.last_pop_changed, vars(result))
+        print('XXX pop_frame returning. lpc=%s'%self.last_pop_changed, vars(result), 'opts:', [{k[1].name(): t for k, t in f.types.items()} for f in options])
+        print('XXX pop_frame returning. new last frame:', 
+            {k[1].name(): t for k, t in self.frames[-1].types.items()})
 
         return result
 
@@ -345,7 +351,7 @@ class ConditionalTypeBinder:
             # just copy this variable into a single stored frame.
             self.allow_jump(i)
 #        import pdb; pdb.set_trace()
-        print('XXX binder POST-PUT2', [[str(t[1]) for t in f.types] for f in self.frames])
+        print('XXX binder POST-PUT2', [[str(k[1]) for k in f.types] for f in self.frames])
 
     def invalidate_dependencies(self, expr: BindableExpression) -> None:
         """Invalidate knowledge of types that include expr, but not expr itself.

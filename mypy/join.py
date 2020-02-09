@@ -31,6 +31,14 @@ def join_simple(declaration: Optional[Type], s: Type, t: Type) -> ProperType:
         s = mypy.typeops.true_or_false(s)
         t = mypy.typeops.true_or_false(t)
 
+    # THL: Added:
+    if isinstance(s, DeletedType):
+        return s
+
+    # THL: Added:
+    if isinstance(t, DeletedType):
+        return t
+
     if isinstance(s, AnyType):
         return s
 

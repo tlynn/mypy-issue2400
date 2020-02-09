@@ -5,6 +5,8 @@
 -- TODO: Python 2 versions of list comprehension tests (problem in tests).
 -- TODO: Python 2: Infer assignment when iterating over a non-empty literal?
 -- TODO: Add tests that locals in if/elif/while conditions get checked.
+-- TODO: Test using tuples around vars in for + comprehensions.
+-- TODO: Test using tuples around vars in testUnboundLocalWithin....
 -- TODO: Test "with".
 -- TODO: Test "async with" and "async for". (PEP 492)
 
@@ -294,18 +296,36 @@ def f(arg):
 
 [case testUnboundLocalDelWithinElse]
 def f(arg):
+    e = 1
     if arg:
-        e = 1
+        pass
     else:
         del e
     e  # N: May raise UnboundLocalError: local variable 'e' referenced before assignment
 
+[case testUnboundLocalDelWithinElse2]
+def f(arg):
+    if arg:
+        e = 1
+    else:
+        del e  # N: May raise UnboundLocalError: local variable 'e' referenced before assignment
+    e  # N: May raise UnboundLocalError: local variable 'e' referenced before assignment
+
 [case testUnboundLocalDelWithinElif]
+def f(arg, arg2):
+    e = 1
+    if arg:
+        pass
+    elif arg2:
+        del e
+    e  # N: May raise UnboundLocalError: local variable 'e' referenced before assignment
+
+[case testUnboundLocalDelWithinElif2]
 def f(arg, arg2):
     if arg:
         e = 1
     elif arg2:
-        del e
+        del e  # N: May raise UnboundLocalError: local variable 'e' referenced before assignment
     e  # N: May raise UnboundLocalError: local variable 'e' referenced before assignment
 
 [case testUnboundLocalIfComplicated]
