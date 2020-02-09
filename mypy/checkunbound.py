@@ -65,7 +65,7 @@ class LocalsCollector(TraverserVisitor):
 
     def __init__(self, options: Options) -> None:
         self.options = options
-        self.locals = {}
+        self.locals = set()
         self.started = False
 
     def visit_list_comprehension(self, o: ListComprehension) -> None:

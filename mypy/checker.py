@@ -826,7 +826,7 @@ class TypeChecker(NodeVisitor[None], CheckerPluginInterface):
         undef_names = locals
         for name in globals.union(set(defn.arg_names)):
             if name in undef_names:
-                del undef_names[name]
+                undef_names.remove(name)
         ##print('XXX undef_names:', undef_names)
         self.local_names = undef_names
 
