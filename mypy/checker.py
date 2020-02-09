@@ -3457,7 +3457,11 @@ class TypeChecker(NodeVisitor[None], CheckerPluginInterface):
                                           'accept outside except: blocks even in '
                                           'python 2)'.format(var.name))
                             cast(Var, var.node).type = DeletedType(source=source)
-                            #self.binder.cleanse(var) #XYZZY
+                            # THL: XYZZY: Added "if" guard:
+                            if self.options.python_version[0] >= 3:
+                                self.binder.cleanse(var)
+                            # XYZZY: Should we have an alternative to cleanse
+                            # that sets the type to the DeletedType?
 
                             # XYZZY
                             if 0:
