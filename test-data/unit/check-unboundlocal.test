@@ -486,7 +486,7 @@ def f():
     e  # N: May raise UnboundLocalError: local variable 'e' referenced before assignment
     e2  # N: May raise UnboundLocalError: local variable 'e2' referenced before assignment
 
-[case testUnboundLocalTrySysExit]
+[case testUnboundLocalTryExceptions1]
 def f(arg):
     try:
         if arg:
@@ -494,8 +494,22 @@ def f(arg):
     except:
         x = 1
     else:
-        sys.exit()
+        # TODO: Detect sys.exit()?
+        raise BaseException()
     x
+
+[builtins fixtures/exception.pyi]
+
+[case testUnboundLocalTryExceptions2]
+def f(arg):
+    try:
+        if arg:
+            raise BaseException()
+    except:
+        x = 1
+    else:
+        pass
+    x  # N: May raise UnboundLocalError: local variable 'x' referenced before assignment
 
 [builtins fixtures/exception.pyi]
 
