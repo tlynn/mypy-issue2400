@@ -221,9 +221,9 @@ class ConditionalTypeBinder:
                 # know anything about key in at least one possible frame.
                 continue
 
-            print('UUU update_from_options:', key, key[1].name(), resulting_values)
+            print('UUU update_from_options:', key, str(key[1]), resulting_values)
             type = resulting_values[0]
-            print('UUU FIRST TYPE OF', key[1].name(), '=', type)
+            print('UUU FIRST TYPE OF', str(key[1]), '=', type)
             assert type is not None
             declaration_type = get_proper_type(self.declarations.get(key))
             if isinstance(declaration_type, AnyType):
@@ -233,7 +233,7 @@ class ConditionalTypeBinder:
             else:
                 for other in resulting_values[1:]:
                     assert other is not None
-                    print('UUU JOIN', key[1].name(), '- OLD TYPE:', type,
+                    print('UUU JOIN', str(key[1]), '- OLD TYPE:', type,
                           'WITH', other, '-> NEW TYPE:',
                           join_simple(self.declarations[key], type, other))
                     type = join_simple(self.declarations[key], type, other)
@@ -264,9 +264,9 @@ class ConditionalTypeBinder:
             options.insert(0, self.frames[-1])
 
         self.last_pop_changed = self.update_from_options(options)
-        print('XXX pop_frame returning. lpc=%s'%self.last_pop_changed, vars(result), 'opts:', [{k[1].name(): t for k, t in f.types.items()} for f in options])
+        print('XXX pop_frame returning. lpc=%s'%self.last_pop_changed, vars(result), 'opts:', [{str(k[1]): t for k, t in f.types.items()} for f in options])
         print('XXX pop_frame returning. new last frame:', 
-            {k[1].name(): t for k, t in self.frames[-1].types.items()})
+            {str(k[1]): t for k, t in self.frames[-1].types.items()})
 
         return result
 

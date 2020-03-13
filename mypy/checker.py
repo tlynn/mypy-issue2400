@@ -3346,9 +3346,9 @@ class TypeChecker(NodeVisitor[None], CheckerPluginInterface):
                 if s.else_body:
                     self.accept(s.else_body)
             print('---- AFTER VISITING ELSE')
-            print([{k[1].name(): t for k,t in f.types.items()} for f in self.binder.frames])
+            print([{str(k[1]): t for k,t in f.types.items()} for f in self.binder.frames])
         print('---- AFTER VISITING IF')
-        print([{k[1].name(): t for k,t in f.types.items()} for f in self.binder.frames])
+        print([{str(k[1]): t for k,t in f.types.items()} for f in self.binder.frames])
 
     def visit_while_stmt(self, s: WhileStmt) -> None:
         """Type check a while statement."""
